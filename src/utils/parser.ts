@@ -1,4 +1,5 @@
 // Use standard Node require to bypass ESM wrapper interop issues in Next.js/Turbopack
+const { CanvasFactory } = require('pdf-parse/worker');
 const { PDFParse } = require('pdf-parse');
 import mammoth from 'mammoth';
 import crypto from 'crypto';
@@ -10,7 +11,7 @@ export async function parsePdf(buffer: Buffer): Promise<string> {
   let parser: any = null;
   try {
     // Instantiate Mehmet Kozan's modern PDFParse parser
-    parser = new PDFParse({ data: buffer });
+    parser = new PDFParse({ data: buffer, CanvasFactory });
     const result = await parser.getText();
     return result.text || '';
   } catch (e: any) {
