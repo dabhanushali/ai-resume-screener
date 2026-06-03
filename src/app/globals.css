@@ -1,26 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #f6f8fb;
+  --foreground: #172033;
+  --primary: #2563eb;
+  --secondary: #059669;
+  --accent: #64748b;
+  --panel-bg: #ffffff;
+  --panel-border: #dbe3ef;
+  --muted-bg: #f8fafc;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Outfit', sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Premium Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #eef2f7;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+/* Redesigned Card Panels - Professional Corporate Minimalist Style */
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
+}
+
+.glass-panel-glow {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+}
+
+/* Input Fields - Clean, Modern and Polished */
+.glass-input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #172033;
+  transition: all 0.2s ease-in-out;
+}
+.glass-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  background: #ffffff;
+}
+
+/* Text Gradient - Sleek Blue to Green/Teal Professional Corporate Blend */
+.text-gradient {
+  color: #0f172a;
+}
+
+/* Neutralized glow states to look highly professional */
+.text-glow-primary {
+  text-shadow: none;
+}
+
+.animate-glow-pulse {
+  animation: none;
+  opacity: 0.1;
+}
+
+/* Professional Card Hover Toggles */
+.hover-glow {
+  transition: all 0.2s ease-in-out;
+}
+.hover-glow:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  border-color: var(--primary);
+}
+
+.hover-glow-green:hover {
+  transition: all 0.2s ease-in-out;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+  border-color: var(--secondary);
+}
+
+.text-slate-100,
+.text-slate-200 {
+  color: #111827;
+}
+
+.text-slate-300,
+.text-slate-400 {
+  color: #475569;
+}
+
+.text-slate-500 {
+  color: #64748b;
+}
+
+.border-slate-800\/40,
+.border-slate-800\/50,
+.border-slate-800\/60,
+.border-slate-800\/80 {
+  border-color: #dbe3ef;
+}
+
+.bg-slate-900\/20,
+.bg-slate-900\/30,
+.bg-slate-900\/40,
+.bg-slate-800\/40 {
+  background-color: #f8fafc;
+}
+
+.border-slate-800,
+.border-slate-850,
+.border-slate-900\/80,
+.border-slate-700\/40 {
+  border-color: #dbe3ef !important;
+}
+
+.bg-slate-950,
+.bg-slate-950\/40,
+.bg-slate-950\/60,
+.bg-slate-900,
+.bg-slate-900\/10,
+.bg-slate-900\/20,
+.bg-slate-900\/30,
+.bg-slate-900\/35,
+.bg-slate-900\/60,
+.bg-slate-900\/80,
+.bg-slate-800,
+.bg-slate-800\/20,
+.bg-slate-800\/30,
+.bg-slate-800\/40 {
+  background-color: #f8fafc !important;
+}
+
+.text-indigo-300,
+.text-indigo-400,
+.text-purple-300,
+.text-purple-400 {
+  color: #1d4ed8 !important;
+}
+
+.border-indigo-500\/10,
+.border-indigo-500\/20,
+.border-indigo-500\/25,
+.border-indigo-500\/30,
+.border-indigo-500\/35,
+.border-purple-500\/10,
+.border-purple-500\/20,
+.border-purple-500\/25,
+.border-purple-500\/30 {
+  border-color: #bfdbfe !important;
+}
+
+.bg-indigo-500\/5,
+.bg-indigo-500\/10,
+.bg-indigo-500\/15,
+.bg-indigo-500\/20,
+.bg-indigo-500\/30,
+.bg-purple-500\/5,
+.bg-purple-500\/10,
+.bg-purple-500\/15,
+.bg-purple-500\/20,
+.bg-purple-500\/30 {
+  background-color: #eff6ff !important;
 }

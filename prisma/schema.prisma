@@ -1,0 +1,136 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  status       String     @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model UserInvitation {
+  
+  id        String   @id @default(uuid())
+  email     String   @unique
+  status    String   @default("PENDING") // PENDING, ACCEPTED
+  createdAt DateTime @default(now())
+}
+
+model Job {
+  id                 String       @id @default(uuid())
+  title              String
+  department         String
+  employmentType     String       // Full-time, Part-time, Contract, etc.
+  location           String
+  minExperience      Int
+  maxExperience      Int
+  requiredSkills     Json
+  preferredSkills    Json
+  minDegree          String
+  minGpa             String       @default("")
+  noticePeriod       String
+  certifications     Json
+  keywords           Json
+  minMatchScore      Float        @default(70)
+  isArchived         Boolean      @default(false)
+  
+  // Configurable weights for evaluation
+  weightSkills       Float        @default(40)
+  weightExperience   Float        @default(25)
+  weightRelevance    Float        @default(15)
+  weightPreferred    Float        @default(10)
+  weightEducation    Float        @default(5)
+  weightNoticePeriod Float        @default(5)
+  
+  // Configurable thresholds for categorization
+  thresholdShortlist Float        @default(75)
+  thresholdReview    Float        @default(50)
+  
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  screenings         Screening[]
+}
+
+model JobTemplate {
+  id              String   @id @default(uuid())
+  name            String   @unique // e.g., "React Developer", "QA Engineer"
+  title           String
+  department      String
+  employmentType  String
+  location        String
+  minExperience   Int
+  maxExperience   Int
+  requiredSkills  Json
+  preferredSkills Json
+  minDegree       String
+  minGpa          String   @default("")
+  noticePeriod    String
+  minMatchScore   Float    @default(70)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Candidate {
+  id                 String      @id @default(uuid())
+  name               String
+  email              String      @unique
+  phone              String
+  location           String
+  linkedinUrl        String?
+  portfolioUrl       String?
+  currentDesignation String?
+  currentCompany     String?
+  totalExperience    Float       @default(0)
+  skills             Json
+  certifications     Json
+  education          Json
+  employmentHistory  Json
+  projects           Json
+  noticePeriod       String      @default("")
+  resumeHash         String      @unique
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  screenings         Screening[]
+}
+
+model Screening {
+  id             String    @id @default(uuid())
+  jobId          String
+  candidateId    String
+  matchScore     Float
+  recommendation String    // SHORTLIST, REVIEW, REJECT
+  aiSummary      String
+  strengths      Json
+  weaknesses     Json
+  missingSkills  Json
+  hrStatus       String    @default("PENDING") // PENDING, SHORTLISTED, REJECTED, HOLD
+  hrNotes        String    @default("")
+  remarks        String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  userName  String?  @default("System")
+  action    String
+  timestamp DateTime @default(now())
+  metadata  Json
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
