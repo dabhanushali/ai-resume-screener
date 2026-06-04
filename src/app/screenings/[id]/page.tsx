@@ -38,6 +38,7 @@ interface ScreeningDetail {
   hrStatus: 'PENDING' | 'SHORTLISTED' | 'REJECTED' | 'HOLD';
   hrNotes: string;
   remarks: string;
+  interviewQuestions?: Array<{ question: string; expectedAnswer: string; reason: string }>;
   candidate: {
     id: string;
     name: string;
@@ -77,9 +78,10 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
   const [statusError, setStatusError] = useState('');
   const [notes, setNotes] = useState('');
   const [hrStatus, setHrStatus] = useState<'PENDING' | 'SHORTLISTED' | 'REJECTED' | 'HOLD'>('PENDING');
+  const [generatingGuide, setGeneratingGuide] = useState(false);
 
   // Tab selections
-  const [activeTab, setActiveTab] = useState<'details' | 'privacy'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'privacy' | 'guide'>('details');
 
   useEffect(() => {
     fetchScreeningDetail();
@@ -143,6 +145,28 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
       setStatusError(e.message || 'Re-screen failed');
     } finally {
       setRescreening(false);
+    }
+  };
+
+  const handleGenerateGuide = async (isRegenerate: boolean = false) => {
+    setGeneratingGuide(true);
+    setStatusMessage('');
+    setStatusError('');
+    try {
+      const res = await fetch(`/api/screenings/${screeningId}/interview-guide`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regenerate: isRegenerate })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate guide');
+      
+      setScreening(prev => prev ? { ...prev, interviewQuestions: data.questions } : prev);
+      setStatusMessage('Interview guide generated successfully.');
+    } catch (e: any) {
+      setStatusError(e.message || 'Failed to generate guide');
+    } finally {
+      setGeneratingGuide(false);
     }
   };
 
@@ -226,6 +250,16 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
               }`}
             >
               Resume Privacy
+            </button>
+            <button
+              onClick={() => setActiveTab('guide')}
+              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all duration-200 cursor-pointer ${
+                activeTab === 'guide'
+                  ? 'border-indigo-500 text-indigo-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Interview Guide
             </button>
           </div>
 
@@ -311,6 +345,63 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
               <div className="p-4 bg-blue-50 border border-blue-100 rounded-lg text-sm text-slate-700 leading-relaxed">
                 The uploaded PDF/DOC/DOCX is parsed in memory for screening and then discarded. Raw resume text is not stored on this candidate profile.
               </div>
+            </div>
+          )}
+
+          {activeTab === 'guide' && (
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 border-b border-slate-100 pb-3">
+                <FileText className="w-5 h-5 text-indigo-600" />
+                AI Interview Guide
+              </h2>
+              
+              {!screening.interviewQuestions || screening.interviewQuestions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center p-8 text-center bg-slate-50 rounded-xl border border-slate-200">
+                  <p className="text-sm text-slate-600 mb-4 font-medium max-w-md">
+                    Generate a tailored list of technical and behavioral questions based on this candidate's specific profile and the job requirements.
+                  </p>
+                  <button
+                    onClick={() => handleGenerateGuide(false)}
+                    disabled={generatingGuide}
+                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {generatingGuide ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    Generate Interview Guide
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-5 mt-2">
+                  {screening.interviewQuestions.map((q, idx) => (
+                    <div key={idx} className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <h4 className="text-sm font-bold text-slate-800 flex items-start gap-2 leading-relaxed">
+                        <span className="text-indigo-600 font-black">Q{idx+1}.</span>
+                        {q.question}
+                      </h4>
+                      <div className="pl-6 space-y-3 mt-3">
+                        <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                          <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block mb-1">Look For</span>
+                          <p className="text-sm text-slate-700 leading-relaxed font-medium">{q.expectedAnswer}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                          <span className="text-[10px] text-slate-600 font-bold uppercase tracking-wider">Reason: {q.reason}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  <div className="pt-6 mt-4 flex justify-end border-t border-slate-100">
+                    <button
+                      onClick={() => handleGenerateGuide(true)}
+                      disabled={generatingGuide}
+                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700 font-semibold text-xs rounded-lg shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {generatingGuide ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Regenerate Guide
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -452,39 +543,45 @@ export default function ScreeningDetailPage({ params }: { params: Promise<{ id: 
 
             {/* HR status selector buttons */}
             <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => setHrStatus('SHORTLISTED')}
-                className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer ${
-                  hrStatus === 'SHORTLISTED' 
-                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/2' 
-                    : 'border-slate-800 bg-slate-900/10 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Shortlist
-              </button>
-              <button
-                type="button"
-                onClick={() => setHrStatus('HOLD')}
-                className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer ${
-                  hrStatus === 'HOLD' 
-                    ? 'bg-amber-500/10 border-amber-500 text-amber-400 shadow-md shadow-amber-500/2' 
-                    : 'border-slate-800 bg-slate-900/10 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Hold
-              </button>
-              <button
-                type="button"
-                onClick={() => setHrStatus('REJECTED')}
-                className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer ${
-                  hrStatus === 'REJECTED' 
-                    ? 'bg-rose-500/10 border-rose-500 text-rose-400 shadow-md shadow-rose-500/2' 
-                    : 'border-slate-800 bg-slate-900/10 text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Reject
-              </button>
+              {hrStatus === 'PENDING' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setHrStatus('SHORTLISTED')}
+                    className="py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/2"
+                  >
+                    Shortlist
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHrStatus('HOLD')}
+                    className="py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer bg-amber-500/10 border-amber-500 text-amber-400 shadow-md shadow-amber-500/2"
+                  >
+                    Hold
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHrStatus('REJECTED')}
+                    className="py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer bg-rose-500/10 border-rose-500 text-rose-400 shadow-md shadow-rose-500/2"
+                  >
+                    Reject
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className={`py-2 px-1 text-center rounded-xl text-xs font-bold border transition-all duration-300 cursor-pointer ${
+                    hrStatus === 'SHORTLISTED'
+                      ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400 shadow-md shadow-emerald-500/2 cursor-not-allowed'
+                      : hrStatus === 'REJECTED'
+                      ? 'bg-rose-500/10 border-rose-500 text-rose-400 shadow-md shadow-rose-500/2 cursor-not-allowed'
+                      : 'bg-amber-500/10 border-amber-500 text-amber-400 shadow-md shadow-amber-500/2 cursor-not-allowed'
+                  }`}
+                >
+                  {hrStatus}
+                </button>
+              )}
             </div>
 
             {/* Recruiter Notes Text Area */}

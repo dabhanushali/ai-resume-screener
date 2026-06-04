@@ -6,21 +6,12 @@ import {
   UploadCloud, Briefcase, FileText, AlertTriangle, 
   CheckCircle2, XCircle, Loader2, ArrowRight, Trash2, ShieldAlert
 } from 'lucide-react';
+import { useUpload } from '@/components/upload-context';
 
 interface Job {
   id: string;
   title: string;
   department: string;
-}
-
-interface UploadQueueItem {
-  id: string;
-  file: File;
-  status: 'QUEUED' | 'PARSING' | 'DUPLICATE' | 'SUCCESS' | 'SKIPPED' | 'ERROR';
-  progress: number;
-  errorMsg?: string;
-  extractedDetails?: any;
-  existingCandidate?: any;
 }
 
 const MAX_FILE_SIZE_MB = 10;
@@ -32,15 +23,21 @@ function UploadPageContent() {
   const queryJobId = searchParams.get('jobId');
 
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [selectedJobId, setSelectedJobId] = useState('');
-  const [queue, setQueue] = useState<UploadQueueItem[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
-  const [processing, setProcessing] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
-  const [pageError, setPageError] = useState('');
 
-  // Duplicate Resolution Modal State
-  const [duplicateItem, setDuplicateItem] = useState<UploadQueueItem | null>(null);
+  const {
+    queue,
+    processing,
+    selectedJobId, setSelectedJobId,
+    pageError, setPageError,
+    duplicateItem,
+    addFilesToQueue,
+    removeFromQueue,
+    clearQueue,
+    processQueue,
+    resolveDuplicateAction
+  } = useUpload();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,7 +48,7 @@ function UploadPageContent() {
         const data = await res.json();
         if (res.ok && data.success) {
           setJobs(data.jobs);
-          if (data.jobs.length > 0) {
+          if (data.jobs.length > 0 && !selectedJobId) {
             setSelectedJobId(queryJobId || data.jobs[0].id);
           }
         }
@@ -80,174 +77,26 @@ function UploadPageContent() {
     setIsDragActive(false);
     
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      addFilesToQueue(Array.from(e.dataTransfer.files));
+      if (!selectedJobId) {
+        setPageError('Please select a target job requirement first.');
+        return;
+      }
+      setPageError('');
+      const job = jobs.find(j => j.id === selectedJobId);
+      addFilesToQueue(Array.from(e.dataTransfer.files), selectedJobId, job?.title);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      addFilesToQueue(Array.from(e.target.files));
-    }
-  };
-
-  const addFilesToQueue = (files: File[]) => {
-    const newItems: UploadQueueItem[] = files.map(file => {
-      const ext = file.name.split('.').pop()?.toLowerCase();
-      const isSupported = ext === 'pdf' || ext === 'docx' || ext === 'doc';
-      const isEmpty = file.size === 0;
-      const isTooLarge = file.size > MAX_FILE_SIZE_BYTES;
-
-      let status: UploadQueueItem['status'] = 'QUEUED';
-      let errorMsg: string | undefined;
-
-      if (!isSupported) {
-        status = 'ERROR';
-        errorMsg = 'Unsupported file format. Use PDF, DOC, or DOCX.';
-      } else if (isEmpty) {
-        status = 'ERROR';
-        errorMsg = 'Empty file rejected.';
-      } else if (isTooLarge) {
-        status = 'ERROR';
-        errorMsg = `File is too large. Upload files up to ${MAX_FILE_SIZE_MB}MB.`;
+      if (!selectedJobId) {
+        setPageError('Please select a target job requirement first.');
+        return;
       }
-
-      return {
-        id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        file,
-        status,
-        progress: status === 'ERROR' ? 100 : 0,
-        errorMsg
-      };
-    });
-
-    setQueue(prev => [...prev, ...newItems]);
-  };
-
-  const removeFromQueue = (id: string) => {
-    setQueue(prev => prev.filter(item => item.id !== id));
-  };
-
-  const clearQueue = () => {
-    setQueue([]);
-  };
-
-  // Run queue processor
-  const processQueue = async () => {
-    if (!selectedJobId) {
-      setPageError('Please select a target job requirement first.');
-      return;
+      setPageError('');
+      const job = jobs.find(j => j.id === selectedJobId);
+      addFilesToQueue(Array.from(e.target.files), selectedJobId, job?.title);
     }
-
-    setPageError('');
-    setProcessing(true);
-    
-    for (const item of queue) {
-      if (item.status !== 'QUEUED') continue;
-
-      // Update status to parsing
-      updateItemStatus(item.id, 'PARSING', 20);
-
-      try {
-        const formData = new FormData();
-        formData.append('file', item.file);
-        formData.append('jobId', selectedJobId);
-
-        const res = await fetch('/api/resumes/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await res.json();
-        
-        if (res.status === 200 && data.duplicate) {
-          // Pause and trigger duplicate resolution modal
-          setQueue(prev => prev.map(q => 
-            q.id === item.id 
-              ? { ...q, status: 'DUPLICATE', progress: 100, extractedDetails: data.candidateDetails, existingCandidate: data.existingCandidate }
-              : q
-          ));
-          setDuplicateItem({
-            ...item,
-            status: 'DUPLICATE',
-            extractedDetails: data.candidateDetails,
-            existingCandidate: data.existingCandidate
-          });
-          // Break loop to wait for recruiter input
-          setProcessing(false);
-          return;
-        }
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Parsing error');
-        }
-
-        updateItemStatus(item.id, 'SUCCESS', 100);
-
-      } catch (e: any) {
-        setQueue(prev => prev.map(q => 
-          q.id === item.id ? { ...q, status: 'ERROR', progress: 100, errorMsg: e.message || 'Processing failed' } : q
-        ));
-      }
-    }
-
-    setProcessing(false);
-  };
-
-  const resolveDuplicateAction = async (keepNew: boolean) => {
-    if (!duplicateItem) return;
-
-    const itemId = duplicateItem.id;
-    setDuplicateItem(null);
-    setProcessing(true);
-
-    if (!keepNew) {
-      // HR chose to ignore/keep original
-      setQueue(prev => prev.map(q => 
-        q.id === itemId ? { ...q, status: 'SKIPPED', progress: 100, errorMsg: 'Skipped - kept original candidate' } : q
-      ));
-      // Re-trigger queue processing for subsequent items
-      setTimeout(() => continueProcessing(), 200);
-      return;
-    }
-
-    // HR chose to overwrite (Keep New)
-    updateItemStatus(itemId, 'PARSING', 60);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', duplicateItem.file);
-      formData.append('jobId', selectedJobId);
-      formData.append('overrideDuplicate', 'true'); // Overwrite flag!
-
-      const res = await fetch('/api/resumes/upload', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Overwrite failed');
-
-      updateItemStatus(itemId, 'SUCCESS', 100);
-    } catch (e: any) {
-      setQueue(prev => prev.map(q => 
-        q.id === itemId ? { ...q, status: 'ERROR', progress: 100, errorMsg: e.message } : q
-      ));
-    }
-
-    // Re-trigger processing for next elements in queue
-    setTimeout(() => continueProcessing(), 200);
-  };
-
-  const continueProcessing = async () => {
-    setProcessing(true);
-    // Recursively process the rest of the queue
-    await processQueue();
-  };
-
-  const updateItemStatus = (id: string, status: UploadQueueItem['status'], progress: number) => {
-    setQueue(prev => prev.map(item => 
-      item.id === id ? { ...item, status, progress } : item
-    ));
   };
 
   if (loadingJobs) {
@@ -318,7 +167,6 @@ function UploadPageContent() {
           <select
             value={selectedJobId}
             onChange={(e) => setSelectedJobId(e.target.value)}
-            disabled={processing}
             className="glass-input w-full px-4 py-3.5 rounded-lg text-sm font-semibold"
           >
             {jobs.map(j => (
@@ -353,7 +201,6 @@ function UploadPageContent() {
             multiple
             accept=".pdf,.docx,.doc"
             onChange={handleFileChange}
-            disabled={processing}
             className="hidden"
           />
           <div className="w-14 h-14 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700">
@@ -383,8 +230,7 @@ function UploadPageContent() {
             <div className="flex items-center gap-2">
               <button
                 onClick={clearQueue}
-                disabled={processing}
-                className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer disabled:opacity-40"
+                className="px-3.5 py-2 border border-slate-300 hover:bg-slate-50 text-slate-700 hover:text-slate-900 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer"
               >
                 Clear Queue
               </button>
@@ -422,6 +268,15 @@ function UploadPageContent() {
                 </div>
 
                 <div className="flex items-center gap-4 shrink-0">
+                  {/* Target Job Indicator */}
+                  <div className="hidden sm:block">
+                    {item.jobTitle && (
+                      <span className="px-2 py-1 bg-slate-50 text-slate-500 text-[10px] font-semibold rounded-md border border-slate-200">
+                        {item.jobTitle}
+                      </span>
+                    )}
+                  </div>
+
                   {/* Status Indicator */}
                   {item.status === 'QUEUED' && (
                     <span className="px-2 py-1 bg-slate-100 text-slate-700 text-[10px] font-bold rounded-md border border-slate-200 uppercase">Queued</span>

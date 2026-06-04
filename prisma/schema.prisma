@@ -113,6 +113,7 @@ model Screening {
   strengths      Json
   weaknesses     Json
   missingSkills  Json
+  interviewQuestions Json @default("[]")
   hrStatus       String    @default("PENDING") // PENDING, SHORTLISTED, REJECTED, HOLD
   hrNotes        String    @default("")
   remarks        String    @default("")

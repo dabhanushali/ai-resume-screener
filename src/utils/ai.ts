@@ -90,6 +90,7 @@ export interface AIService {
   parseResume(resumeText: string): Promise<ParsedResume>;
   screenCandidate(parsedResume: ParsedResume, jobRequirements: JobRequirements): Promise<ScreeningDetails>;
   parseJobDescription(jdText: string): Promise<JobRequirements>;
+  generateInterviewQuestions(parsedResume: ParsedResume, jobRequirements: JobRequirements, previousQuestions?: any[]): Promise<Array<{question: string, expectedAnswer: string, reason: string}>>;
 }
 
 // --------------------------------------------------------
@@ -487,6 +488,26 @@ class HeuristicAIService implements AIService {
       certifications: [], keywords: [],
     };
   }
+
+  async generateInterviewQuestions(parsedResume: ParsedResume, job: JobRequirements, previousQuestions?: any[]): Promise<Array<{question: string, expectedAnswer: string, reason: string}>> {
+    return [
+      {
+        question: `Can you walk me through your experience with ${job.requiredSkills[0] || 'the core technologies required for this role'}?`,
+        expectedAnswer: 'Candidate should provide specific examples of past projects where they used these technologies effectively.',
+        reason: 'Verify foundational required skills.'
+      },
+      {
+        question: 'What has been your most challenging project so far, and how did you overcome the obstacles?',
+        expectedAnswer: 'Look for problem-solving skills, resilience, and specific technical or architectural challenges they resolved.',
+        reason: 'Assess problem-solving and experience level.'
+      },
+      {
+        question: 'Why are you looking to leave your current role and what are you looking for in this new position?',
+        expectedAnswer: 'Look for alignment with the company goals and verify their notice period or availability constraints.',
+        reason: 'Understand motivation and cultural fit.'
+      }
+    ];
+  }
 }
 
 // --------------------------------------------------------
@@ -686,6 +707,89 @@ EXPECTED JSON SCHEMA FORMAT (No markdown wrapper, pure JSON):
 
   async parseJobDescription(jdText: string): Promise<JobRequirements> {
     return parseJobDescriptionWithAI(jdText);
+  }
+
+  async generateInterviewQuestions(parsedResume: ParsedResume, job: JobRequirements, previousQuestions?: any[]): Promise<Array<{question: string, expectedAnswer: string, reason: string}>> {
+    let previousQuestionsContext = "";
+    if (previousQuestions && previousQuestions.length > 0) {
+      previousQuestionsContext = `
+IMPORTANT INSTRUCTION - DO NOT REPEAT THESE PREVIOUSLY GENERATED QUESTIONS:
+${JSON.stringify(previousQuestions.map((q: any) => q.question), null, 2)}
+`;
+    }
+
+    const prompt = `
+You are an expert technical interviewer. Based on the candidate's parsed resume and the job requirements, generate a tailored list of 8-10 interview questions.
+Focus specifically on:
+1. Validating their claimed strengths.
+2. Probing into their weaknesses or missing skills compared to the job requirements.
+3. Asking about specific projects or experiences listed on their resume.
+
+JOB REQUIREMENTS:
+${JSON.stringify(job, null, 2)}
+
+CANDIDATE RESUME:
+${JSON.stringify(parsedResume, null, 2)}
+${previousQuestionsContext}
+
+EXPECTED JSON SCHEMA FORMAT (No markdown wrapper, pure JSON):
+{
+  "questions": [
+    {
+      "question": "The specific question to ask the candidate",
+      "expectedAnswer": "What a good answer should include or what red flags to look out for",
+      "reason": "Why this question is being asked based on their profile"
+    }
+  ]
+}
+`;
+
+    try {
+      let rawJsonText = "";
+      if (this.provider === "gemini") {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${this.apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                responseMimeType: "application/json"
+              }
+            })
+          }
+        );
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error?.message || "Gemini error");
+        rawJsonText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      } else {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+            messages: [
+              { role: "system", content: "You are an expert technical interviewer generating tailored questions." },
+              { role: "user", content: prompt }
+            ]
+          })
+        });
+        const data = await response.json();
+        rawJsonText = data.choices?.[0]?.message?.content ?? "";
+      }
+
+      const cleanJson = rawJsonText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+      const evaluation = JSON.parse(cleanJson);
+      return Array.isArray(evaluation.questions) ? evaluation.questions : [];
+    } catch (e) {
+      console.warn("LLM Question Generation failed, falling back to heuristic evaluation:", e);
+      return new HeuristicAIService().generateInterviewQuestions(parsedResume, job);
+    }
   }
 }
 
